@@ -1,0 +1,116 @@
+#include <iostream>
+#include <fstream>
+#include <cstdlib>
+#include <ctime>
+#include <pthread.h>
+
+using namespace std;
+
+const int N = 1000; // Size of the matrices
+const int numThreads = 4; // Number of threads
+
+int **A, **B, **C;
+
+struct ThreadData {
+    int startRow;
+    int endRow;
+};
+
+void generateRandomMatrix(int **matrix, int size) {
+    for (int i = 0; i < size; ++i) {
+        for (int j = 0; j < size; ++j) {
+            matrix[i][j] = rand() % 10; // Generate random numbers between 0 and 9
+        }
+    }
+}
+
+void *multiplySubMatrices(void *args) {
+    ThreadData *data = (ThreadData *) args;
+    for (int i = data->startRow; i < data->endRow; ++i) {
+        for (int j = 0; j < N; ++j) {
+            C[i][j] = 0;
+            for (int k = 0; k < N; ++k) {
+                C[i][j] += A[i][k] * B[k][j];
+            }
+        }
+    }
+    pthread_exit(nullptr);
+}
+
+void writeMatrixToFile(int **matrix, const char *filename) {
+    ofstream outfile(filename);
+    if (outfile.is_open()) {
+        for (int i = 0; i < N; ++i) {
+            for (int j = 0; j < N; ++j) {
+                outfile << matrix[i][j] << " ";
+            }
+            outfile << endl;
+        }
+        outfile.close();
+    } else {
+        cerr << "Unable to open file for writing." << endl;
+    }
+}
+
+int main() {
+    srand(time(nullptr)); // Seed for random number generation
+
+    // Allocate memory for matrices
+    A = new int*[N];
+    B = new int*[N];
+    C = new int*[N];
+    for (int i = 0; i < N; ++i) {
+        A[i] = new int[N];
+        B[i] = new int[N];
+        C[i] = new int[N];
+    }
+
+    // Generate random matrices A and B
+    generateRandomMatrix(A, N);
+    generateRandomMatrix(B, N);
+
+    // Record the start time
+    clock_t startTime = clock();
+
+    // Create threads and divide the work
+    pthread_t threads[numThreads];
+    ThreadData threadData[numThreads];
+    int rowsPerThread = N / numThreads;
+    for (int i = 0; i < numThreads; ++i) {
+        threadData[i].startRow = i * rowsPerThread;
+        threadData[i].endRow = (i + 1) * rowsPerThread;
+        if (i == numThreads - 1) {
+            threadData[i].endRow = N;
+        }
+        pthread_create(&threads[i], nullptr, multiplySubMatrices, (void *)&threadData[i]);
+    }
+
+    // Wait for all threads to finish
+    for (int i = 0; i < numThreads; ++i) {
+        pthread_join(threads[i], nullptr);
+    }
+
+    // Record the end time
+    clock_t endTime = clock();
+
+    // Calculate the execution time
+    double executionTime = double(endTime - startTime) / CLOCKS_PER_SEC;
+
+    // Print the execution time
+    cout << "Execution Time: " << executionTime << " seconds." << endl;
+
+    // Write the resulting matrix C to a file
+    writeMatrixToFile(C, "result_pthreads.txt");
+
+    // Clean up
+    for (int i = 0; i < N; ++i) {
+        delete[] A[i];
+        delete[] B[i];
+        delete[] C[i];
+    }
+    delete[] A;
+    delete[] B;
+    delete[] C;
+
+    return 0;
+}
